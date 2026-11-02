@@ -1,3 +1,4 @@
+
 name: Java CI and AWS EKS CD
 
 on:
@@ -25,14 +26,17 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+
       - name: Set up Java 21
         uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
+
       - name: Compile, run tests, and package
         run: sh ./mvnw --batch-mode --no-transfer-progress clean verify
+
       - name: Save JUnit reports
         if: always()
         uses: actions/upload-artifact@v7.0.2
@@ -41,6 +45,7 @@ jobs:
           path: target/surefire-reports/
           retention-days: 14
           if-no-files-found: warn
+
       - name: Save executable JAR
         uses: actions/upload-artifact@v7.0.2
         with:
@@ -49,9 +54,26 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  security:
+    name: Scan repository for secrets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout full Git history
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+
   publish:
     name: Build and publish SHA-tagged image
-    needs: ci
+    needs: [ci, security]
     if: >-
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
@@ -68,19 +90,23 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+
       - name: Compute lowercase GHCR image reference
         id: image
         env:
           REPOSITORY: ${{ github.repository }}
         run: echo "tag=ghcr.io/${REPOSITORY,,}:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4.4.1
+
       - name: Log in to GHCR
         uses: docker/login-action@v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build from source, test, and publish
         id: build
         uses: docker/build-push-action@v7.4.0
@@ -95,6 +121,7 @@ jobs:
             org.opencontainers.image.title=CIA 2 DevOps Deployment Dashboard
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
       - name: Record published image
         env:
           IMAGE: ${{ steps.image.outputs.tag }}
@@ -127,10 +154,12 @@ jobs:
         uses: actions/checkout@v7.0.1
         with:
           persist-credentials: false
+
       - name: Validate deployment settings
         run: |
           test -n "$AWS_ROLE_ARN" || { echo 'Set AWS_ROLE_ARN before enabling deployment.' >&2; exit 1; }
           [[ "$IMAGE" =~ ^ghcr.io/.+:[0-9a-f]{40}@sha256:[0-9a-f]{64}$ ]] || { echo 'Missing immutable image reference.' >&2; exit 1; }
+
       - name: Assume AWS role using GitHub OIDC
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
@@ -139,6 +168,7 @@ jobs:
           allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
           role-session-name: github-${{ github.run_id }}
           role-duration-seconds: 3600
+
       - name: Install kubectl matching cluster minor version
         run: |
           set -euo pipefail
@@ -151,10 +181,13 @@ jobs:
           printf '%s  %s\n' "$expected" "$RUNNER_TEMP/kubectl" | sha256sum --check
           chmod +x "$RUNNER_TEMP/kubectl"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
       - name: Connect to existing EKS cluster
         run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME" --region "$AWS_REGION" --alias cia2-eks
+
       - name: Deploy published image and verify rollout
         run: bash scripts/deploy.sh
+
       - name: Verify public HTTP health, HTML, and commit SHA
         run: >-
           python3 scripts/verify-deployment.py
@@ -163,6 +196,7 @@ jobs:
           --expected-version "$EXPECTED_VERSION"
           --expected-environment aws-eks
           --attempts 60 --delay 5
+
       - name: Optional Ansible verification on manual runs
         if: github.event_name == 'workflow_dispatch'
         run: |
@@ -171,6 +205,7 @@ jobs:
           "$RUNNER_TEMP/ansible/bin/ansible-playbook" -i ansible/inventory.ini ansible/verify.yml \
             -e "expected_sha=$GITHUB_SHA" -e "expected_version=$EXPECTED_VERSION" \
             -e "expected_image=$IMAGE" -e "deployment_url=$PUBLIC_URL"
+
       - name: Collect deployment evidence
         run: |
           mkdir -p "$RUNNER_TEMP/cloud-evidence"
@@ -185,12 +220,14 @@ jobs:
           curl --fail --silent --show-error "$PUBLIC_URL/actuator/health" > "$RUNNER_TEMP/cloud-evidence/health.json"
           printf '%s\n' "$IMAGE" > "$RUNNER_TEMP/cloud-evidence/image.txt"
           printf '%s\n' "$PUBLIC_URL" > "$RUNNER_TEMP/cloud-evidence/url.txt"
+
       - name: Save cloud evidence
         uses: actions/upload-artifact@v7.0.2
         with:
           name: cloud-evidence
           path: ${{ runner.temp }}/cloud-evidence/
           retention-days: 14
+
       - name: Diagnostics on failure
         if: failure()
         run: |
