@@ -1,7 +1,9 @@
+
 # syntax=docker/dockerfile:1
 
 # Build from source and run the tests; a host JDK or prebuilt JAR is not required.
 FROM eclipse-temurin:21-jdk-jammy AS build
+
 WORKDIR /workspace
 
 COPY .mvn/ .mvn/
@@ -15,12 +17,19 @@ RUN sed -i 's/\r$//' mvnw \
 
 # The runtime contains the JRE and packaged application, without Maven or sources.
 FROM eclipse-temurin:21-jre-alpine AS runtime
+
+# OCI metadata label
+LABEL org.opencontainers.image.description="CIA 2 DevOps Deployment Dashboard with automated CI/CD using GitHub Actions and AWS EKS"
+
 RUN addgroup -S -g 10001 app \
     && adduser -S -D -H -u 10001 -G app app
+
 WORKDIR /app
+
 COPY --from=build --chown=10001:10001 /workspace/target/devops-dashboard.jar ./app.jar
 
 USER 10001:10001
+
 EXPOSE 8080
 
 # BusyBox wget is included in Alpine; no extra HTTP client needs installing.
