@@ -11,9 +11,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest(properties = {
         // Explicit inputs make the local metadata contract independent of the host environment.
         "APP_NAME=DevOps Deployment Dashboard",
-        "APP_VERSION=v1",
+        "APP_VERSION=v2",
         "APP_ENVIRONMENT=local",
-        "DEPLOYMENT_MESSAGE=Version 1 is running. Ready for the next deployment!",
+        "DEPLOYMENT_MESSAGE=Version 2 is running. CI/CD pipeline demonstration!",
         "COMMIT_SHA="
 })
 class DashboardApplicationTests {
@@ -37,9 +37,9 @@ class DashboardApplicationTests {
     void bindsLocalDeploymentMetadata() {
         assertThat(metadata).isEqualTo(new DeploymentMetadata(
                 "DevOps Deployment Dashboard",
-                "v1",
+                "v2",
                 "local",
-                "Version 1 is running. Ready for the next deployment!",
+                "Version 2 is running. CI/CD pipeline demonstration!",
                 ""
         ));
     }
@@ -49,6 +49,10 @@ class DashboardApplicationTests {
         var json = objectMapper.valueToTree(metadata);
 
         assertThat(json.has("commitSha")).isFalse();
-        assertThat(json.path("version").asText()).isEqualTo("v1");
+        assertThat(json.path("version").asText()).isEqualTo("v2");
     }
 }
+
+
+
+

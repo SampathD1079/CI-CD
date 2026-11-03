@@ -13,9 +13,9 @@ server:
 
 deployment:
   name: ${APP_NAME:DevOps Deployment Dashboard}
-  version: ${APP_VERSION:v1}
+  version: ${APP_VERSION:v2}
   environment: ${APP_ENVIRONMENT:local}
-  message: ${DEPLOYMENT_MESSAGE:Version 1 is running. Ready for the next deployment!}
+  message: ${DEPLOYMENT_MESSAGE:Version 2 is running. CI/CD pipeline demonstration!}
   commit-sha: ${COMMIT_SHA:}
 
 management:
@@ -28,3 +28,4 @@ management:
       show-details: never
       probes:
         enabled: true
+
